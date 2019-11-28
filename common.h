@@ -24,6 +24,7 @@ struct job {
     int jobId;
     char *filename;
     struct parseResult result;
+    int bufferSize;
 };
 
 #endif //SQLTEST_COMMON_H

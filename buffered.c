@@ -69,12 +69,12 @@ void parseFromBuffered(char *filename, long size, int threadCount, struct job *j
     close(file);
 
     stoptimer(&readTimer);
-    double mbs = ((double) totalRead / (double) (readTimer.seconds * 1000000000 + readTimer.nanos)) * 1000;
+    /* double mbs = ((double) totalRead / (double) (readTimer.seconds * 1000000000 + readTimer.nanos)) * 1000;
     printf("Read %li bytes in %li.%03li seconds, at ~%0.2lfMb/s\n", totalRead, readTimer.seconds,
            readTimer.nanos / 1000000,
            mbs);
 
-    printf("Parsing buffer using %d threads.\n", threadCount);
+    printf("Parsing buffer using %d threads.\n", threadCount);*/
 
     pthread_t threads[threadCount];
 
