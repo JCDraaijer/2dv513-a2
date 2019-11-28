@@ -86,17 +86,6 @@ int main(int argc, char **argv) {
     long size = buffer.st_size;
 
     printf("Reading file %s of size %li\n", filename, size);
-    /*char *strBuf = (char *) malloc(sizeof(char) * size);
-
-    long bytesRead;
-    long totalRead = 0;
-    while ((bytesRead = read(file, strBuf + totalRead, size)) != 0) {
-        totalRead += bytesRead;
-    }
-    stoptimer(&timer);
-    double mbs = ((double) totalRead / (double) (timer.seconds * 1000000000 + timer.nanos)) * 1000;
-    printf("Read %li bytes in %li.%03li seconds, at ~%0.2lfMb/s\n", totalRead, timer.seconds, timer.nanos / 1000000,
-           mbs);*/
 
 
     timekeeper_t totalTimer;
@@ -134,8 +123,6 @@ jsmntok_t *getbykey(const char *key, int strlen, const char *jsonstring, jsmntok
 
 void *parseTokens(void *collection) {
     struct job *pointers = collection;
-    //printf("Parsing tokens from %li characters in job %d.\n", pointers->endP - pointers->startP, pointers->jobId);
-
     long totalTokenCount = 0;
 
     int fd = open(pointers->filename, O_RDONLY);
