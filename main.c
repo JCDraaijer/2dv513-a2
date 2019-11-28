@@ -112,12 +112,13 @@ int main(int argc, char **argv) {
             jobs[i].filename = filename;
             jobs[i].jobId = i;
             if (i == threadCount - 1) {
-                jobs[i].start = end;
+                jobs[i].start = start;
                 jobs[i].end = size;
             } else {
                 jobs[i].start = start;
-                jobs[i].end = findNextNewline(file, proxSize);
+                jobs[i].end = findNextNewline(file, end);
                 start = jobs[i].end;
+                end = jobs[i].end + proxSize;
             }
         }
 
@@ -160,30 +161,51 @@ void *parseTokens(void *collection) {
 
     int fd = open(pointers->filename, O_RDONLY);
     lseek(fd, pointers->start, SEEK_CUR);
-
-    const int bufferSize = 1024 * 1024 * 50;
+    printf("%li, %li, %li, %d\n", pointers->start, pointers->end, pointers->end - pointers->start, pointers->jobId);
+    int bufferSize = 1024 * 1024 * 50;
 
     char *buffer = malloc(sizeof(char) * bufferSize);
-    int bufferIndex = 0;
+
+    long bufferIndex = 0;
+    int lines = 0;
+    long tokenCount = 0;
 
     do {
-        read(fd, buffer, bufferSize - 2048);
-        bufferIndex = bufferIndex + bufferSize - 2048 - 1;
-        while (buffer[bufferIndex++] != '\n') {
-            read(fd, buffer + bufferIndex, 1);
+        int bytesRead = read(fd, buffer, bufferSize - 2048);
+        bufferIndex = bytesRead - 1;
+        if (bytesRead == bufferSize - 2048) {
+            while (buffer[bufferIndex] != '\n') {
+                read(fd, buffer + ++bufferIndex, 1);
+                if (bufferIndex >= bufferSize) {
+                    buffer = realloc(buffer, sizeof(char) * (bufferSize + 2048));
+                    bufferSize += 2048;
+                }
+            }
         }
 
+        char *currentBuffer = buffer;
+        do {
+            int start = 0;
+            int end = 0;
 
+            while (currentBuffer[end++] != '\n');
+
+            jsmntok_t tokens[50];
+            jsmn_parser parser;
+            jsmn_init(&parser);
+
+            tokenCount = jsmn_parse(&parser, currentBuffer + start, end - 1 - start, tokens, 50);
+            totalTokenCount += tokenCount - 1;
+            lines++;
+            currentBuffer += end;
+        } while (currentBuffer < (buffer + bufferIndex));
     } while (lseek(fd, 0, SEEK_CUR) < pointers->end);
 
-    long tokenCount = 0;
-    int lines = 0;
     timekeeper_t timer;
     starttimer(&timer);
-
     stoptimer(&timer);
     if (totalTokenCount > 0) {
-        //printf("Parsed %li tokens and %d lines in job %d.\n", totalTokenCount / 2, lines, pointers->jobId);
+        printf("Parsed %li tokens and %d lines in job %d.\n", totalTokenCount / 2, lines, pointers->jobId);
     } else {
         printf("Failed to parse tokens in job %d.\n", pointers->jobId);
     }
