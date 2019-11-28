@@ -4,11 +4,14 @@
 
 #include "buffered.h"
 #include "timer.h"
-#include "jsmn.h"
 #include <stdio.h>
 #include <pthread.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include "jsmn.h"
 
-void *parseTokens(void *collection) {
+void *parseTokensBuffered(void *collection) {
     struct job *pointers = collection;
     //printf("Parsing tokens from %li characters in job %d.\n", pointers->endP - pointers->startP, pointers->jobId);
 
@@ -48,7 +51,29 @@ void *parseTokens(void *collection) {
     pthread_exit(&exit);
 }
 
-void parseFromBuffered(char *buffer, long size, int threadCount, struct job *jobs) {
+void parseFromBuffered(char *filename, long size, int threadCount, struct job *jobs) {
+
+    int file = open(filename, O_RDONLY);
+
+    timekeeper_t readTimer;
+    starttimer(&readTimer);
+
+    char *buffer = (char *) malloc(sizeof(char) * size);
+
+    long bytesRead;
+    long totalRead = 0;
+    while ((bytesRead = read(file, buffer + totalRead, size)) != 0) {
+        totalRead += bytesRead;
+    }
+
+    close(file);
+
+    stoptimer(&readTimer);
+    double mbs = ((double) totalRead / (double) (readTimer.seconds * 1000000000 + readTimer.nanos)) * 1000;
+    printf("Read %li bytes in %li.%03li seconds, at ~%0.2lfMb/s\n", totalRead, readTimer.seconds,
+           readTimer.nanos / 1000000,
+           mbs);
+
     printf("Parsing buffer using %d threads.\n", threadCount);
 
     pthread_t threads[threadCount];
@@ -69,7 +94,7 @@ void parseFromBuffered(char *buffer, long size, int threadCount, struct job *job
     }
 
     for (int i = 0; i < threadCount; i++) {
-        pthread_create(&threads[i], NULL, &parseTokens, &jobs[i]);
+        pthread_create(&threads[i], NULL, &parseTokensBuffered, &jobs[i]);
     }
     for (int i = 0; i < threadCount; i++) {
         pthread_join(threads[i], NULL);

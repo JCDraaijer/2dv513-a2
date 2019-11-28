@@ -7,7 +7,7 @@
 
 #include "common.h"
 
-void *parseTokens(void *);
+void *parseTokensBuffered(void *);
 
 void parseFromBuffered(char *, long, int, struct job *);
 
