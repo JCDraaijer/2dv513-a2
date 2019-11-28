@@ -13,8 +13,14 @@ struct parseResult {
 };
 
 struct job {
-    long start;
-    long end;
+    union {
+        long start;
+        char *startP;
+    };
+    union {
+        long end;
+        char *endP;
+    };
     int jobId;
     char *filename;
     struct parseResult result;
