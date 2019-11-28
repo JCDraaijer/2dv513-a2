@@ -33,10 +33,6 @@ long findNextNewline(int, long);
 
 jsmntok_t *getbykey(const char *, int, const char *, jsmntok_t *, int);
 
-/*pthread_t *threads;
-struct job *jobs;
-struct parseResult *results;*/
-
 int main(int argc, char **argv) {
     char *filename = NULL;
     int parse = 1;
