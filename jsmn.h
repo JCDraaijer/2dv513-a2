@@ -25,6 +25,7 @@
 #define JSMN_H
 
 #include <stddef.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -461,6 +462,17 @@ JSMN_API void jsmn_init(jsmn_parser *parser) {
     parser->pos = 0;
     parser->toknext = 0;
     parser->toksuper = -1;
+}
+
+jsmntok_t *getbykey(const char *key, int strlen, const char *jsonstring, jsmntok_t *tokens, int toklength) {
+    for (int i = 0; i < toklength; i++) {
+        jsmntok_t token = tokens[i];
+        if (token.type == JSMN_STRING && strlen == token.end - token.start &&
+            strncmp(jsonstring + token.start, key, token.end - token.start) == 0) {
+            return &tokens[i + 1];
+        }
+    }
+    return NULL;
 }
 
 #endif /* JSMN_HEADER */

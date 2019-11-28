@@ -6,7 +6,7 @@ set(CMAKE_C_STANDARD 99)
 
 find_package(Threads REQUIRED)
 
-add_executable(sqltest main.c jsmn.h timer.c timer.h)
+add_executable(sqltest main.c jsmn.h timer.c timer.h fileread.c fileread.h common.h)
 target_link_libraries(sqltest Threads::Threads)
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/cmake-build-debug/${CMAKE_PROJECT_NAME} DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/build)
