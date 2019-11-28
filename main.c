@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
     for (int i = 0; i < threadCount; i++) {
         totalLines += jobs[i].result.lines;
     }
-
+    free(jobs);
     printf("Parsed a total of %li lines in %li.%03li seconds.\n", totalLines, totalTimer.seconds,
            totalTimer.nanos / 1000000);
     return 0;

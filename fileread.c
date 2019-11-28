@@ -18,7 +18,7 @@ void *parseTokens(void *collection) {
 
     int fd = open(pointers->filename, O_RDONLY);
     lseek(fd, pointers->start, SEEK_CUR);
-    int bufferSize = 1024 * 1024 * 50;
+    int bufferSize = 1024 * 1024 * 25;
 
     char *buffer = malloc(sizeof(char) * bufferSize);
 
@@ -60,7 +60,7 @@ void *parseTokens(void *collection) {
             currentBuffer += end;
         } while (currentBuffer < (buffer + bufferIndex));
     } while (lseek(fd, 0, SEEK_CUR) < pointers->end);
-
+    free(buffer);
     close(fd);
 
     timekeeper_t timer;
@@ -94,13 +94,14 @@ long findNextNewline(int fd, long min) {
 
 void parseTokensFromFile(char *filename, int threadCount, long maxSize, struct job *jobs) {
     printf("Parsing file using %d threads.\n", threadCount);
-    pthread_t *threads = malloc(sizeof(pthread_t) * threadCount);
 
     int fd = open(filename, O_RDONLY);
 
     long proxSize = maxSize / threadCount;
     long start = 0;
     long end = proxSize;
+
+    pthread_t threads[threadCount];
     for (int i = 0; i < threadCount; i++) {
         jobs[i].filename = filename;
         jobs[i].jobId = i;

@@ -58,7 +58,7 @@ void parseFromBuffered(char *filename, long size, int threadCount, struct job *j
     timekeeper_t readTimer;
     starttimer(&readTimer);
 
-    char *buffer = (char *) malloc(sizeof(char) * size);
+    char *buffer = malloc(sizeof(char) * size);
 
     long bytesRead;
     long totalRead = 0;
@@ -99,4 +99,5 @@ void parseFromBuffered(char *filename, long size, int threadCount, struct job *j
     for (int i = 0; i < threadCount; i++) {
         pthread_join(threads[i], NULL);
     }
+    free(buffer);
 }
