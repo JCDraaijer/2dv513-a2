@@ -12,17 +12,20 @@
 #include "timer.h"
 #include "jsmn.h"
 
+struct parseResult {
+    long lines;
+    struct timespec time;
+};
+
 struct job {
     long start;
     long end;
     int jobId;
     char *filename;
+    struct parseResult result;
 };
 
-struct parseResult {
-    long lines;
-    struct timespec time;
-};
+void parseTokensFromFile(char *, int, long, struct job *);
 
 void *parseTokens(void *);
 
@@ -30,9 +33,9 @@ long findNextNewline(int, long);
 
 jsmntok_t *getbykey(const char *, int, const char *, jsmntok_t *, int);
 
-pthread_t *threads;
+/*pthread_t *threads;
 struct job *jobs;
-struct parseResult *results;
+struct parseResult *results;*/
 
 int main(int argc, char **argv) {
     char *filename = NULL;
@@ -76,14 +79,13 @@ int main(int argc, char **argv) {
     }
 
 
-    printf("Reading file %s\n", filename);
-
     timekeeper_t timer;
     starttimer(&timer);
 
     fstat(file, &buffer);
     long size = buffer.st_size;
 
+    printf("Reading file %s of size %li\n", filename, size);
     /*char *strBuf = (char *) malloc(sizeof(char) * size);
 
     long bytesRead;
@@ -100,40 +102,17 @@ int main(int argc, char **argv) {
     timekeeper_t totalTimer;
     starttimer(&totalTimer);
 
+    struct job *jobs = malloc(sizeof(struct job) * threadCount);
+
     if (parse) {
-        printf("Parsing file using %d threads.\n", threadCount);
-        threads = malloc(sizeof(pthread_t) * threadCount);
-        jobs = malloc(sizeof(struct job) * threadCount);
-        results = malloc(sizeof(struct parseResult) * threadCount);
-        long proxSize = size / threadCount;
-        long start = 0;
-        long end = proxSize;
-        for (int i = 0; i < threadCount; i++) {
-            jobs[i].filename = filename;
-            jobs[i].jobId = i;
-            if (i == threadCount - 1) {
-                jobs[i].start = start;
-                jobs[i].end = size;
-            } else {
-                jobs[i].start = start;
-                jobs[i].end = findNextNewline(file, end);
-                start = jobs[i].end;
-                end = jobs[i].end + proxSize;
-            }
-        }
-
-        for (int i = 0; i < threadCount; i++) {
-            pthread_create(&threads[i], NULL, &parseTokens, &jobs[i]);
-        }
-    }
-
-    long totalLines = 0;
-    for (int i = 0; i < threadCount; i++) {
-        pthread_join(threads[i], NULL);
-        totalLines += results[i].lines;
+        parseTokensFromFile(filename, threadCount, size, jobs);
     }
 
     stoptimer(&totalTimer);
+    long totalLines = 0;
+    for (int i = 0; i < threadCount; i++) {
+        totalLines += jobs[i].result.lines;
+    }
 
     printf("Parsed a total of %li lines in %li.%03li seconds.\n", totalLines, totalTimer.seconds,
            totalTimer.nanos / 1000000);
@@ -161,7 +140,6 @@ void *parseTokens(void *collection) {
 
     int fd = open(pointers->filename, O_RDONLY);
     lseek(fd, pointers->start, SEEK_CUR);
-    printf("%li, %li, %li, %d\n", pointers->start, pointers->end, pointers->end - pointers->start, pointers->jobId);
     int bufferSize = 1024 * 1024 * 50;
 
     char *buffer = malloc(sizeof(char) * bufferSize);
@@ -171,19 +149,22 @@ void *parseTokens(void *collection) {
     long tokenCount = 0;
 
     do {
-        int bytesRead = read(fd, buffer, bufferSize - 2048);
+        long toRead = bufferSize - 2048;
+        long maxRead = pointers->end - lseek(fd, 0, SEEK_CUR);
+        if (toRead > maxRead) {
+            toRead = maxRead;
+        }
+        int bytesRead = read(fd, buffer, toRead);
         bufferIndex = bytesRead - 1;
-        if (bytesRead == bufferSize - 2048) {
+        if (bytesRead == toRead) {
             while (buffer[bufferIndex] != '\n') {
                 read(fd, buffer + ++bufferIndex, 1);
                 if (bufferIndex >= bufferSize) {
-                    printf("Reallocated\n");
                     buffer = realloc(buffer, sizeof(char) * (bufferSize + 2048));
                     bufferSize += 2048;
                 }
             }
         }
-
         char *currentBuffer = buffer;
         do {
             int start = 0;
@@ -210,9 +191,9 @@ void *parseTokens(void *collection) {
     } else {
         printf("Failed to parse tokens in job %d.\n", pointers->jobId);
     }
-    results[pointers->jobId].lines = lines;
-    results[pointers->jobId].time.tv_sec = timer.seconds;
-    results[pointers->jobId].time.tv_nsec = timer.nanos;
+    pointers->result.lines = lines;
+    pointers->result.time.tv_sec = timer.seconds;
+    pointers->result.time.tv_nsec = timer.nanos;
 
     int exit = 1;
     pthread_exit(&exit);
@@ -229,4 +210,36 @@ long findNextNewline(int fd, long min) {
     } while (character != '\n');
     lseek(fd, currentIndex, SEEK_SET);
     return min + index;
+}
+
+void parseTokensFromFile(char *filename, int threadCount, long maxSize, struct job *jobs) {
+    printf("Parsing file using %d threads.\n", threadCount);
+    pthread_t *threads = malloc(sizeof(pthread_t) * threadCount);
+
+    int fd = open(filename, O_RDONLY);
+
+    long proxSize = maxSize / threadCount;
+    long start = 0;
+    long end = proxSize;
+    for (int i = 0; i < threadCount; i++) {
+        jobs[i].filename = filename;
+        jobs[i].jobId = i;
+        if (i == threadCount - 1) {
+            jobs[i].start = start;
+            jobs[i].end = maxSize;
+        } else {
+            jobs[i].start = start;
+            jobs[i].end = findNextNewline(fd, end);
+            start = jobs[i].end;
+            end = jobs[i].end + proxSize;
+        }
+    }
+
+    for (int i = 0; i < threadCount; i++) {
+        pthread_create(&threads[i], NULL, &parseTokens, &jobs[i]);
+    }
+
+    for (int i = 0; i < threadCount; i++) {
+        pthread_join(threads[i], NULL);
+    }
 }
