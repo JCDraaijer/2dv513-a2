@@ -177,6 +177,7 @@ void *parseTokens(void *collection) {
             while (buffer[bufferIndex] != '\n') {
                 read(fd, buffer + ++bufferIndex, 1);
                 if (bufferIndex >= bufferSize) {
+                    printf("Reallocated\n");
                     buffer = realloc(buffer, sizeof(char) * (bufferSize + 2048));
                     bufferSize += 2048;
                 }
