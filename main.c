@@ -17,15 +17,12 @@ int main(int argc, char **argv) {
     int threadCount = 4;
     int fullBuffer = 0;
     int bufferSize = 50;
-    int basicPrint = 0;
+    int verbosity = 0;
     int c;
-    while ((c = getopt(argc, argv, "f:nj:bs:")) != -1) {
+    while ((c = getopt(argc, argv, "f:j:bs:v")) != -1) {
         switch (c) {
             case 'f':
                 filename = optarg;
-                break;
-            case 'n':
-                basicPrint = 1;
                 break;
             case 'j': {
                 char *end;
@@ -36,6 +33,9 @@ int main(int argc, char **argv) {
                 }
                 break;
             }
+            case 'v':
+                verbosity++;
+                break;
             case 'b':
                 fullBuffer = 1;
                 break;
@@ -48,7 +48,6 @@ int main(int argc, char **argv) {
                 }
                 break;
             }
-
             default:
                 break;
         }
@@ -70,15 +69,14 @@ int main(int argc, char **argv) {
     fstat(file, &buffer);
     long size = buffer.st_size;
     close(file);
-
-    if (!basicPrint) {
+    if (verbosity > 0) {
         printf("Reading file %s\n", filename);
     }
 
     timekeeper_t totalTimer;
     starttimer(&totalTimer);
 
-    struct job *jobs = malloc(sizeof(struct job) * threadCount);
+    struct job jobs[threadCount];
     if (fullBuffer) {
         parseFromBuffered(filename, size, threadCount, jobs);
     } else {
@@ -89,15 +87,17 @@ int main(int argc, char **argv) {
 
     long totalLines = 0;
     for (int i = 0; i < threadCount; i++) {
-        totalLines += jobs[i].result.lines;
+        struct parseresult result = jobs[i].result;
+        if (verbosity == 2) {
+            printf("Parsed %li tokens and %li lines in job %d\n", result.tokens / 2, result.lines, jobs[i].jobId);
+        }
+        totalLines += result.lines;
     }
-    free(jobs);
-    if (!basicPrint) {
+    if (verbosity > 0) {
         printf("Parsed a total of %li lines in %li.%03li seconds.\n", totalLines, totalTimer.seconds,
                totalTimer.nanos / 1000000);
-    } else {
-        printf("%li, %li.%03li\n", totalLines, totalTimer.seconds, totalTimer.nanos / 1000000);
     }
+    printf("%li, %li.%03li\n", totalLines, totalTimer.seconds, totalTimer.nanos / 1000000);
     return 0;
 }
 

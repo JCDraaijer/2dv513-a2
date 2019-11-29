@@ -12,12 +12,12 @@
 #include "jsmn.h"
 
 void *parseTokensBuffered(void *collection) {
-    struct job *pointers = collection;
-    //printf("Parsing tokens from %li characters in job %d.\n", pointers->endP - pointers->startP, pointers->jobId);
+    struct job *job = collection;
+    printf("Parsing tokens from %li characters in job %d.\n", job->endP - job->startP, job->jobId);
 
     long totalTokenCount = 0;
 
-    char *buffer = pointers->startP;
+    char *buffer = job->startP;
     long tokenCount = 0;
     int lines = 0;
     timekeeper_t timer;
@@ -36,17 +36,12 @@ void *parseTokensBuffered(void *collection) {
         totalTokenCount += tokenCount - 1;
         lines++;
         buffer += end;
-    } while (tokenCount > 0 && *buffer != EOF && *buffer != 0 && buffer < pointers->endP);
+    } while (tokenCount > 0 && *buffer != EOF && *buffer != 0 && buffer < job->endP);
     stoptimer(&timer);
-    if (totalTokenCount > 0) {
-        //printf("Parsed %li tokens and %d lines in job %d.\n", totalTokenCount / 2, lines, pointers->jobId);
-    } else {
-        printf("Failed to parse tokens in job %d.\n", pointers->jobId);
-    }
-    pointers->result.lines = lines;
-    pointers->result.time.tv_sec = timer.seconds;
-    pointers->result.time.tv_nsec = timer.nanos;
-
+    job->result.tokens = totalTokenCount;
+    job->result.lines = lines;
+    job->result.time.tv_sec = timer.seconds;
+    job->result.time.tv_nsec = timer.nanos;
     int exit = 1;
     pthread_exit(&exit);
 }
@@ -69,12 +64,12 @@ void parseFromBuffered(char *filename, long size, int threadCount, struct job *j
     close(file);
 
     stoptimer(&readTimer);
-    /* double mbs = ((double) totalRead / (double) (readTimer.seconds * 1000000000 + readTimer.nanos)) * 1000;
+    double mbs = ((double) totalRead / (double) (readTimer.seconds * 1000000000 + readTimer.nanos)) * 1000;
     printf("Read %li bytes in %li.%03li seconds, at ~%0.2lfMb/s\n", totalRead, readTimer.seconds,
            readTimer.nanos / 1000000,
            mbs);
 
-    printf("Parsing buffer using %d threads.\n", threadCount);*/
+    printf("Parsing buffer using %d threads.\n", threadCount);
 
     pthread_t threads[threadCount];
 

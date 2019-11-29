@@ -7,8 +7,9 @@
 
 #include <time.h>
 
-struct parseResult {
+struct parseresult {
     long lines;
+    long tokens;
     struct timespec time;
 };
 
@@ -23,8 +24,8 @@ struct job {
     };
     int jobId;
     char *filename;
-    struct parseResult result;
     int bufferSize;
+    struct parseresult result;
 };
 
 #endif //SQLTEST_COMMON_H

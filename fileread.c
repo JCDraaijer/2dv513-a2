@@ -26,6 +26,8 @@ void *parseTokens(void *collection) {
     int lines = 0;
     long tokenCount = 0;
 
+    timekeeper_t timer;
+    starttimer(&timer);
     do {
         long toRead = bufferSize - 2048;
         long maxRead = job->end - lseek(fd, 0, SEEK_CUR);
@@ -60,21 +62,15 @@ void *parseTokens(void *collection) {
             currentBuffer += end;
         } while (currentBuffer < (buffer + bufferIndex));
     } while (lseek(fd, 0, SEEK_CUR) < job->end);
+    stoptimer(&timer);
+
     free(buffer);
     close(fd);
 
-    timekeeper_t timer;
-    starttimer(&timer);
-    stoptimer(&timer);
-    if (totalTokenCount > 0) {
-        //printf("Parsed %li tokens and %d lines in job %d.\n", totalTokenCount / 2, lines, job->jobId);
-    } else {
-        printf("Failed to parse tokens in job %d.\n", job->jobId);
-    }
+    job->result.tokens = totalTokenCount;
     job->result.lines = lines;
     job->result.time.tv_sec = timer.seconds;
     job->result.time.tv_nsec = timer.nanos;
-
     int exit = 1;
     pthread_exit(&exit);
 }
@@ -93,7 +89,7 @@ long findNextNewline(int fd, long min) {
 }
 
 void parseTokensFromFile(char *filename, int threadCount, int bufferSize, long maxSize, struct job *jobs) {
-    // printf("Parsing file using %d threads.\n", threadCount);
+    printf("Parsing file using %d threads.\n", threadCount);
 
     int fd = open(filename, O_RDONLY);
 
