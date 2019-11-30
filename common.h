@@ -6,10 +6,12 @@
 #define SQLTEST_COMMON_H
 
 #include <time.h>
+#include <sqlite3.h>
 
 struct parseresult {
     long lines;
     long tokens;
+    int invalid;
     struct timespec time;
 };
 
@@ -26,6 +28,7 @@ struct job {
     char *filename;
     int bufferSize;
     struct parseresult result;
+    sqlite3 *db;
 };
 
 #endif //SQLTEST_COMMON_H

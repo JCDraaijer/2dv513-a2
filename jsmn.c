@@ -361,10 +361,11 @@ JSMN_API void jsmn_init(jsmn_parser *parser) {
     parser->toksuper = -1;
 }
 
-jsmntok_t *getbykey(const char *key, int strlen, const char *jsonstring, jsmntok_t *tokens, int toklength) {
+jsmntok_t *getbykey(const char *key, const char *jsonstring, jsmntok_t *tokens, int toklength) {
+    const unsigned long length = strlen(key);
     for (int i = 0; i < toklength; i++) {
         jsmntok_t token = tokens[i];
-        if (token.type == JSMN_STRING && strlen == token.end - token.start &&
+        if (token.type == JSMN_STRING && length == token.end - token.start &&
             strncmp(jsonstring + token.start, key, token.end - token.start) == 0) {
             return &tokens[i + 1];
         }

@@ -8,5 +8,5 @@ find_package(Threads REQUIRED)
 
 add_executable(sqltest main.c jsmn.h jsmn.c timer.c timer.h common.h buffered.c buffered.h buffered.c fileread.h fileread.c)
 target_link_libraries(sqltest Threads::Threads)
-
+target_link_libraries(sqltest sqlite3)
 # file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/cmake-build-debug/${CMAKE_PROJECT_NAME} DESTINATION ${CMAKE_CURRENT_SOURCE_DIR}/build)

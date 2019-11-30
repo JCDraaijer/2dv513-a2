@@ -69,7 +69,10 @@ int main(int argc, char **argv) {
     fstat(file, &buffer);
     long size = buffer.st_size;
     close(file);
-    if (verbosity > 0) {
+    if (verbosity > 1) {
+        printf("Parsing %s file of size %li using %d threads.\n", filename, size, threadCount);
+
+    } else if (verbosity > 0) {
         printf("Reading file %s\n", filename);
     }
 
@@ -88,8 +91,9 @@ int main(int argc, char **argv) {
     long totalLines = 0;
     for (int i = 0; i < threadCount; i++) {
         struct parseresult result = jobs[i].result;
-        if (verbosity == 2) {
-            printf("Parsed %li tokens and %li lines in job %d\n", result.tokens / 2, result.lines, jobs[i].jobId);
+        if (verbosity > 1) {
+            printf("Parsed %li tokens and %li lines in job %d, skipped %d lines due to errors\n", result.tokens / 2,
+                   result.lines, jobs[i].jobId, jobs[i].result.invalid);
         }
         totalLines += result.lines;
     }
