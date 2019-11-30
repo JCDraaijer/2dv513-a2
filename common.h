@@ -31,4 +31,5 @@ struct job {
     sqlite3 *db;
 };
 
+int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *totalLines, sqlite3 *db, char *query);
 #endif //SQLTEST_COMMON_H

@@ -1,0 +1,2 @@
+RC_2011-07 has comment, with id c28qq15, that has an invalid score ("score" instead of a number)
+RC_2012-12 has comment, with id c7hpw5e, with an invalid score ("id" instead of a number)

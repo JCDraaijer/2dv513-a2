@@ -1,4 +1,5 @@
 #include "jsmn.h"
+
 /**
  * Allocates a fresh unused token from the token pool.
  */
@@ -362,13 +363,30 @@ JSMN_API void jsmn_init(jsmn_parser *parser) {
 }
 
 jsmntok_t *getbykey(const char *key, const char *jsonstring, jsmntok_t *tokens, int toklength) {
-    const unsigned long length = strlen(key);
     for (int i = 0; i < toklength; i++) {
         jsmntok_t token = tokens[i];
-        if (token.type == JSMN_STRING && length == token.end - token.start &&
-            strncmp(jsonstring + token.start, key, token.end - token.start) == 0) {
+        if (tokenequals(jsonstring, &token, key)) {
             return &tokens[i + 1];
         }
     }
     return NULL;
+}
+
+jsmntok_t *gettoken(const char *key, const char *jsonstring, jsmntok_t *tokens, int toklength) {
+    const unsigned long length = strlen(key);
+    for (int i = 0; i < toklength; i++) {
+        jsmntok_t token = tokens[i];
+        if (tokenequals(jsonstring, &token, key)) {
+            return &tokens[i];
+        }
+    }
+    return NULL;
+}
+
+int tokenequals(const char *json, jsmntok_t *tok, const char *s) {
+    if (tok->type == JSMN_STRING && (int) strlen(s) == tok->end - tok->start &&
+        strncmp(json + tok->start, s, tok->end - tok->start) == 0) {
+        return 1;
+    }
+    return 0;
 }
