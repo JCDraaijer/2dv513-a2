@@ -24,7 +24,6 @@ void *parseTokens(void *collection) {
 
     //TODO figure out why larger buffer sizes make the program grind to a halt
     char *buffer = malloc(sizeof(char) * bufferSize + 2048);
-    char *query = malloc(sizeof(char) * bufferSize + 2048);
 
     long bufferIndex = 0;
     long *totalLines = malloc(sizeof(long));
@@ -33,7 +32,7 @@ void *parseTokens(void *collection) {
     starttimer(&timer);
     sqlite3 *db;
     int connRes;
-    connRes = sqlite3_open("/home/jona/uni/2dv513/a2/sqlite.db", &db);
+    connRes = sqlite3_open("/home/jona/data/2dv513/sqlite.db", &db);
     if (connRes != SQLITE_OK) {
         printf("Couldn't open database\n");
         pthread_exit(&exit);
@@ -52,11 +51,10 @@ void *parseTokens(void *collection) {
                 if (bufferIndex >= bufferSize - 512) {
                     bufferSize += 2048;
                     buffer = realloc(buffer, sizeof(char) * bufferSize);
-                    query = realloc(query, sizeof(char) * bufferSize);
                 }
             }
         }
-        sqlite_insert(buffer, buffer + bufferIndex + 1, &totalTokenCount, totalLines, db, query);
+        sqlite_insert(buffer, buffer + bufferIndex + 1, &totalTokenCount, totalLines, db);
     } while (lseek(fd, 0, SEEK_CUR) < job->end);
     sqlite3_close(db);
     stoptimer(&timer);
