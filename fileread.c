@@ -32,7 +32,7 @@ void *parseTokens(void *collection) {
     starttimer(&timer);
     sqlite3 *db;
     int connRes;
-    connRes = sqlite3_open("/home/jona/data/2dv513/sqlite.db", &db);
+    connRes = sqlite3_open(job->database, &db);
     if (connRes != SQLITE_OK) {
         printf("Couldn't open database\n");
         pthread_exit(&exit);
@@ -54,7 +54,7 @@ void *parseTokens(void *collection) {
                 }
             }
         }
-        sqlite_insert(buffer, buffer + bufferIndex + 1, &totalTokenCount, totalLines, db);
+        sqlite_insert(buffer, buffer + bufferIndex + 1, &totalTokenCount, totalLines, db, job->queryLines);
     } while (lseek(fd, 0, SEEK_CUR) < job->end);
     sqlite3_close(db);
     stoptimer(&timer);
@@ -82,7 +82,9 @@ long findNextNewline(int fd, long min) {
     return min + index;
 }
 
-void parseTokensFromFile(char *filename, int threadCount, int bufferSize, long maxSize, struct job *jobs) {
+void
+parseTokensFromFile(char *filename, char *database, int threadCount, int bufferSize, long maxSize, struct job *jobs,
+                    int queryLines) {
     int fd = open(filename, O_RDONLY);
 
     long proxSize = maxSize / threadCount;
@@ -93,8 +95,10 @@ void parseTokensFromFile(char *filename, int threadCount, int bufferSize, long m
     for (int i = 0; i < threadCount; i++) {
         jobs[i].bufferSize = bufferSize;
         jobs[i].filename = filename;
+        jobs[i].database = database;
         jobs[i].jobId = i;
         jobs[i].result.invalid = 0;
+        jobs[i].queryLines = queryLines;
         if (i == threadCount - 1) {
             jobs[i].start = start;
             jobs[i].end = maxSize;

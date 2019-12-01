@@ -26,10 +26,11 @@ struct job {
     };
     int jobId;
     char *filename;
+    char* database;
     int bufferSize;
     struct parseresult result;
-    sqlite3 *db;
+    int queryLines;
 };
 
-int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *totalLines, sqlite3 *db);
+int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *totalLines, sqlite3 *db, int queryLines);
 #endif //SQLTEST_COMMON_H

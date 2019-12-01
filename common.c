@@ -9,7 +9,7 @@
 const char *queryStart = "INSERT INTO entries(id, parent_id, link_id, author, body, subreddit_id, subreddit, score, created_utc) VALUES ";
 
 
-int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *totalLines, sqlite3 *db) {
+int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *totalLines, sqlite3 *db, int queryLines) {
     char *currentBuffer = buffer;
 
     long querySize = 8192;
@@ -93,7 +93,7 @@ int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *total
             linesTotal++;
             currentLines++;
             currentBuffer += end;
-        } while (currentLines < 200 && currentBuffer < endP);
+        } while (currentLines < queryLines && currentBuffer < endP);
         query[strlen(query) - 2] = ';';
         char *errormsg = malloc(sizeof(char) * 1024);
         int result = 0;
@@ -108,7 +108,7 @@ int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *total
             *totalLines -= linesTotal;
             return linesTotal;
         }
-        printf("Sent a query %li\n", *totalLines);
+        //printf("Sent a query %li\n", *totalLines);
     } while (currentBuffer < endP);
 
     return 0;

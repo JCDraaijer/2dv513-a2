@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <getopt.h>
 
 #include <string.h>
 #include <unistd.h>
@@ -11,14 +12,41 @@
 #include "timer.h"
 #include "fileread.h"
 
+static struct option long_options[] =
+        {"filename", required_argument, NULL, 'f',
+         "database", required_argument, NULL, 'd',
+         "jobs", required_argument, NULL, 'j',
+         "buffer-size", required_argument, NULL, 's',
+         "query-lines", required_argument, NULL, 'q',
+         "verbose", no_argument, NULL, 'v',
+         "help", no_argument, NULL, 'h',
+
+         0, 0, 0, 0};
+
 int main(int argc, char **argv) {
     char *filename = NULL;
     int threadCount = 4;
     int bufferSize = 50;
     int verbosity = 0;
+    int queryLines = 200;
+    char *database = NULL;
     int c;
-    while ((c = getopt(argc, argv, "f:j:s:v")) != -1) {
+    int option_index;
+    opterr = 0;
+    while ((c = getopt_long(argc, argv, "f:d:j:s:q:vh", long_options, &option_index)) != -1) {
         switch (c) {
+            case 'h': {
+                printf("Available options:\n");
+                printf("--filename, -f [filename]     Specify the filename to read the Reddit comments in JSON format from. (REQUIRED)\n");
+                printf("--database, -d [filename]     The filename of the sqlite database to write the values to. (REQUIRED)\n");
+                printf("--jobs, -j                    The amount of threads to be used for parsing. (Default: 4)\n");
+                printf("--buffer-size, -s             Specify the size of the file buffer used by each thread in KB. (Default: 50)\n");
+                printf("--query-lines, -q             Specify how many lines of each file should be sent per query. Big values can impact performance (Default: 200)\n");
+                printf("                              Increase in case of database bottleneck. Decrease in case of CPU bottleneck.\n");
+                printf("--verbose, -v                 Specify the verbosity of the program. Use multiple times for more verbosity\n");
+                printf("--help, -h                    Print this menu.\n");
+                return EXIT_SUCCESS;
+            }
             case 'f':
                 filename = optarg;
                 break;
@@ -43,14 +71,33 @@ int main(int argc, char **argv) {
                 }
                 break;
             }
+            case 'q': {
+                char *end;
+                queryLines = (int) strtol(optarg, &end, 10);
+                if (end != optarg + strlen(optarg)) {
+                    bufferSize = 200;
+                    printf("Invalid buffer size specified. Defaulting to 50\n");
+                }
+                break;
+            }
+            case 'd':
+                database = optarg;
+                break;
+            case '?':
+                fprintf(stderr, "Invalid argument \"%s\". Use --help for help.\n", argv[optind - 1]);
+                return EXIT_FAILURE;
             default:
                 break;
         }
     }
 
     if (filename == NULL) {
-        printf("The -f argument is required\n");
-        return 1;
+        printf("The filename argument is required. (See --help for help)\n");
+        return EXIT_FAILURE;
+    }
+    if (database == NULL) {
+        printf("The database argument is required. (See --help for help)\n");
+        return EXIT_FAILURE;
     }
 
     struct stat buffer;
@@ -65,17 +112,17 @@ int main(int argc, char **argv) {
     long size = buffer.st_size;
     close(file);
     if (verbosity > 1) {
-        printf("Parsing %s file of size %li using %d threads.\n", filename, size, threadCount);
+        printf("Parsing file %s of size %li using %d threads into database %s\n", filename, size, threadCount, database);
 
     } else if (verbosity > 0) {
-        printf("Reading file %s\n", filename);
+        printf("Parsing file %s into database %s\n", filename, database);
     }
 
     timekeeper_t totalTimer;
     starttimer(&totalTimer);
 
     struct job jobs[threadCount];
-    parseTokensFromFile(filename, threadCount, bufferSize, size, jobs);
+    parseTokensFromFile(filename, database, threadCount, bufferSize, size, jobs, queryLines);
 
     stoptimer(&totalTimer);
 
