@@ -33,7 +33,7 @@ void *parseTokens(void *collection) {
     starttimer(&timer);
     sqlite3 *db;
     int connRes;
-    connRes = sqlite3_open("/home/jona/ramfs/sqlite.db", &db);
+    connRes = sqlite3_open("/home/jona/uni/2dv513/a2/sqlite.db", &db);
     if (connRes != SQLITE_OK) {
         printf("Couldn't open database\n");
         pthread_exit(&exit);

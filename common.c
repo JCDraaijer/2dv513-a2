@@ -5,9 +5,14 @@
 #include "jsmn.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "timer.h"
 
 const char *queryStart = "INSERT INTO entries(id, parent_id, link_id, author, body, subreddit_id, subreddit, score, created_utc) VALUES ";
 
+
+void dostrcat(char *dest, char *src) {
+    strcat(dest, src);
+}
 
 int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *totalLines, sqlite3 *db, char *query) {
     sprintf(query, "%s", queryStart);
@@ -18,11 +23,12 @@ int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *total
     int lines = 0;
     jsmntok_t tokens[50];
     jsmn_parser parser;
+    timekeeper_t timer;
+    starttimer(&timer);
     do {
         int end = 0;
 
-        while (currentBuffer[end++] != '\n');
-
+        while (currentBuffer[end++] != '\n' && end != buffer - endP);
         jsmn_init(&parser);
         tokenCount = jsmn_parse(&parser, currentBuffer, end - 1, tokens, 50);
         if (tokenCount < 0) {
@@ -75,15 +81,14 @@ int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *total
                 currentBuffer + score->start,
                 created_utc->end - created_utc->start,
                 currentBuffer + created_utc->start);
-        char scorestart = *(currentBuffer + score->start);
-        if ((scorestart < '0' || scorestart > '9') && scorestart != '-'){
-            printf("%s", valuesString);
-        }
-        strcat(query, valuesString);
+        dostrcat(query, valuesString);
         *totalLines += 1;
         lines++;
         currentBuffer += end;
     } while (currentBuffer < endP);
+    stoptimer(&timer);
+    printf("Parsed in %li.%03li\n", timer.seconds, timer.nanos / 1000000);
+
     query[strlen(query) - 2] = ';';
     char *errormsg = malloc(sizeof(char) * 1024);
     int result = 0;

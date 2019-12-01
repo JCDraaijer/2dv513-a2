@@ -9,17 +9,15 @@
 
 #include "common.h"
 #include "timer.h"
-#include "buffered.h"
 #include "fileread.h"
 
 int main(int argc, char **argv) {
     char *filename = NULL;
     int threadCount = 4;
-    int fullBuffer = 0;
     int bufferSize = 50;
     int verbosity = 0;
     int c;
-    while ((c = getopt(argc, argv, "f:j:bs:v")) != -1) {
+    while ((c = getopt(argc, argv, "f:j:s:v")) != -1) {
         switch (c) {
             case 'f':
                 filename = optarg;
@@ -35,9 +33,6 @@ int main(int argc, char **argv) {
             }
             case 'v':
                 verbosity++;
-                break;
-            case 'b':
-                fullBuffer = 1;
                 break;
             case 's': {
                 char *end;
@@ -80,11 +75,7 @@ int main(int argc, char **argv) {
     starttimer(&totalTimer);
 
     struct job jobs[threadCount];
-    if (fullBuffer) {
-        parseFromBuffered(filename, size, threadCount, jobs);
-    } else {
-        parseTokensFromFile(filename, threadCount, bufferSize, size, jobs);
-    }
+    parseTokensFromFile(filename, threadCount, bufferSize, size, jobs);
 
     stoptimer(&totalTimer);
 
