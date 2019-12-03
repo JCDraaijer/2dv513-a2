@@ -12,6 +12,10 @@
 #include "timer.h"
 #include "fileread.h"
 
+#define DEFAULT_BUFFER_SIZE 1024
+#define DEFAULT_THREAD_COUNT 4
+#define DEFAULT_QUERY_LINES 2000
+
 static struct option long_options[] =
         {"filename", required_argument, NULL, 'f',
          "database", required_argument, NULL, 'd',
@@ -25,10 +29,10 @@ static struct option long_options[] =
 
 int main(int argc, char **argv) {
     char *filename = NULL;
-    int threadCount = 4;
-    int bufferSize = 50;
+    int threadCount = DEFAULT_THREAD_COUNT;
+    int bufferSize = DEFAULT_BUFFER_SIZE;
+    int queryLines = DEFAULT_QUERY_LINES;
     int verbosity = 0;
-    int queryLines = 200;
     char *database = NULL;
     int c;
     int option_index;
@@ -39,10 +43,12 @@ int main(int argc, char **argv) {
                 printf("Available options:\n");
                 printf("--filename, -f [filename]     Specify the filename to read the Reddit comments in JSON format from. (REQUIRED)\n");
                 printf("--database, -d [filename]     The filename of the sqlite database to write the values to. (REQUIRED)\n");
-                printf("--jobs, -j                    The amount of threads to be used for parsing. (Default: 4)\n");
-                printf("--buffer-size, -s             Specify the size of the file buffer used by each thread in KB. (Default: 50)\n");
-                printf("--query-lines, -q             Specify how many lines of each file should be sent per query. Big values can impact performance (Default: 200)\n");
-                printf("                              Increase in case of database bottleneck. Decrease in case of CPU bottleneck.\n");
+                printf("--jobs, -j                    The amount of threads to be used for parsing. (Default: %d)\n",
+                       DEFAULT_THREAD_COUNT);
+                printf("--buffer-size, -s             The initial size of the file buffer used by each thread in KB (may grow). (Default: %d)\n",
+                       DEFAULT_BUFFER_SIZE);
+                printf("--query-lines, -q             The maximum amount of tuples that should be inserted per query. (Default: %d)\n",
+                       DEFAULT_QUERY_LINES);
                 printf("--verbose, -v                 Specify the verbosity of the program. Use multiple times for more verbosity\n");
                 printf("--help, -h                    Print this menu.\n");
                 return EXIT_SUCCESS;
@@ -54,8 +60,8 @@ int main(int argc, char **argv) {
                 char *end;
                 threadCount = (int) strtol(optarg, &end, 10);
                 if (end != optarg + strlen(optarg)) {
-                    threadCount = 4;
-                    printf("Invalid thread count specified. Defaulting to 4\n");
+                    threadCount = DEFAULT_THREAD_COUNT;
+                    printf("Invalid thread count specified. Defaulting to %d\n", DEFAULT_THREAD_COUNT);
                 }
                 break;
             }
@@ -66,8 +72,8 @@ int main(int argc, char **argv) {
                 char *end;
                 bufferSize = (int) strtol(optarg, &end, 10);
                 if (end != optarg + strlen(optarg)) {
-                    bufferSize = 50;
-                    printf("Invalid buffer size specified. Defaulting to 50\n");
+                    bufferSize = DEFAULT_BUFFER_SIZE;
+                    printf("Invalid buffer size specified. Defaulting to %d\n", DEFAULT_BUFFER_SIZE);
                 }
                 break;
             }
@@ -75,8 +81,8 @@ int main(int argc, char **argv) {
                 char *end;
                 queryLines = (int) strtol(optarg, &end, 10);
                 if (end != optarg + strlen(optarg)) {
-                    bufferSize = 200;
-                    printf("Invalid buffer size specified. Defaulting to 50\n");
+                    bufferSize = DEFAULT_QUERY_LINES;
+                    printf("Invalid buffer size specified. Defaulting to %d\n", DEFAULT_QUERY_LINES);
                 }
                 break;
             }
@@ -100,6 +106,14 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    sqlite3 *db;
+    int connRes = sqlite3_open_v2(database, &db, SQLITE_OPEN_READONLY, NULL);
+    if (connRes != SQLITE_OK) {
+        printf("Couldn't open database (err=%d)\n", connRes);
+        return EXIT_FAILURE;
+    }
+    sqlite3_close_v2(db);
+
     struct stat buffer;
 
     int file = open(filename, O_RDONLY);
@@ -112,7 +126,8 @@ int main(int argc, char **argv) {
     long size = buffer.st_size;
     close(file);
     if (verbosity > 1) {
-        printf("Parsing file %s of size %li using %d threads into database %s\n", filename, size, threadCount, database);
+        printf("Parsing file %s of size %li using %d threads into database %s\n", filename, size, threadCount,
+               database);
 
     } else if (verbosity > 0) {
         printf("Parsing file %s into database %s\n", filename, database);
@@ -123,7 +138,7 @@ int main(int argc, char **argv) {
 
     struct job jobs[threadCount];
     parseTokensFromFile(filename, database, threadCount, bufferSize, size, jobs, queryLines);
-
+    printCallCount();
     stoptimer(&totalTimer);
 
     long totalLines = 0;

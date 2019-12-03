@@ -26,7 +26,7 @@ void *parseTokens(void *collection) {
     char *buffer = malloc(sizeof(char) * bufferSize + 2048);
 
     long bufferIndex = 0;
-    long *totalLines = malloc(sizeof(long));
+    long totalLines = 0;
 
     timekeeper_t timer;
     starttimer(&timer);
@@ -54,7 +54,7 @@ void *parseTokens(void *collection) {
                 }
             }
         }
-        sqlite_insert(buffer, buffer + bufferIndex + 1, &totalTokenCount, totalLines, db, job->queryLines);
+        sqlite_insert(buffer, buffer + bufferIndex + 1, &totalTokenCount, &totalLines, db, job->queryLines);
     } while (lseek(fd, 0, SEEK_CUR) < job->end);
     sqlite3_close(db);
     stoptimer(&timer);
@@ -63,7 +63,7 @@ void *parseTokens(void *collection) {
     close(fd);
 
     job->result.tokens = totalTokenCount;
-    job->result.lines = *totalLines;
+    job->result.lines = totalLines;
     job->result.time.tv_sec = timer.seconds;
     job->result.time.tv_nsec = timer.nanos;
     pthread_exit(&exit);

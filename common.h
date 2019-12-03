@@ -33,4 +33,6 @@ struct job {
 };
 
 int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *totalLines, sqlite3 *db, int queryLines);
+void printCallCount();
+void increaseCallCount();
 #endif //SQLTEST_COMMON_H

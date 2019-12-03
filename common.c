@@ -6,8 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+long callcount = 0;
 const char *queryStart = "INSERT INTO entries(id, parent_id, link_id, author, body, subreddit_id, subreddit, score, created_utc) VALUES ";
-
 
 int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *totalLines, sqlite3 *db, int queryLines) {
     char *currentBuffer = buffer;
@@ -63,41 +63,46 @@ int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *total
             jsmntok_t *subreddit = getbykey("subreddit", currentBuffer, tokens, tokenCount);
             jsmntok_t *score = getbykey("score", currentBuffer, tokens, tokenCount);
             jsmntok_t *created_utc = getbykey("created_utc", currentBuffer, tokens, tokenCount);
-
+            unsigned long originalQueryLength = queryLength;
             queryLength += sprintf(valuesString,
-                               "(\"%.*s\", \"%.*s\", \"%.*s\", \"%.*s\", \"%.*s\", \"%.*s\", \"%.*s\", %.*s, %.*s),\n",
-                               id->end - id->start,
-                               currentBuffer + id->start,
-                               parent_id->end - parent_id->start,
-                               currentBuffer + parent_id->start,
-                               linkid->end - linkid->start,
-                               currentBuffer + linkid->start,
-                               author->end - author->start,
-                               currentBuffer + author->start,
-                               body->end - body->start,
-                               currentBuffer + body->start,
-                               subreddit_id->end - subreddit_id->start,
-                               currentBuffer + subreddit_id->start,
-                               subreddit->end - subreddit->start,
-                               currentBuffer + subreddit->start,
-                               score->end - score->start,
-                               currentBuffer + score->start,
-                               created_utc->end - created_utc->start,
-                               currentBuffer + created_utc->start);
+                                   "(\"%.*s\", \"%.*s\", \"%.*s\", \"%.*s\", \"%.*s\", \"%.*s\", \"%.*s\", %.*s, %.*s),\n",
+                                   id->end - id->start,
+                                   currentBuffer + id->start,
+                                   parent_id->end - parent_id->start,
+                                   currentBuffer + parent_id->start,
+                                   linkid->end - linkid->start,
+                                   currentBuffer + linkid->start,
+                                   author->end - author->start,
+                                   currentBuffer + author->start,
+                                   body->end - body->start,
+                                   currentBuffer + body->start,
+                                   subreddit_id->end - subreddit_id->start,
+                                   currentBuffer + subreddit_id->start,
+                                   subreddit->end - subreddit->start,
+                                   currentBuffer + subreddit->start,
+                                   score->end - score->start,
+                                   currentBuffer + score->start,
+                                   created_utc->end - created_utc->start,
+                                   currentBuffer + created_utc->start);
             while (querySize <= queryLength + 2) {
                 querySize += 1024;
                 query = realloc(query, sizeof(char) * querySize);
             }
-            strcat(query, valuesString);
+            for (unsigned long i = 0; i < queryLength - originalQueryLength; i++) {
+                query[i + originalQueryLength] = valuesString[i];
+            }
+            query[queryLength] = 0;
             *totalLines += 1;
             linesTotal++;
             currentLines++;
             currentBuffer += end;
         } while (currentLines < queryLines && currentBuffer < endP);
         query[strlen(query) - 2] = ';';
-        char *errormsg = malloc(sizeof(char) * 1024);
+
         int result = 0;
+        char *errormsg;
         while ((result = sqlite3_exec(db, query, NULL, 0, &errormsg)) == SQLITE_BUSY);
+
         if (result != SQLITE_OK && result != SQLITE_CONSTRAINT) {
             printf("%d, %s\n", result, errormsg);
             char filename[50] = "";
@@ -105,11 +110,17 @@ int sqlite_insert(char *buffer, const char *endP, long *totalTokens, long *total
             FILE *file = fopen(filename, "w");
             fprintf(file, "%s\n\n\n\n%s", query, errormsg);
             fclose(file);
-            *totalLines -= linesTotal;
-            return linesTotal;
+            *totalLines -= currentLines;
         }
+
+        sqlite3_free(errormsg);
         //printf("Sent a query %li\n", *totalLines);
     } while (currentBuffer < endP);
-
+    free(valuesString);
+    free(query);
     return 0;
+}
+
+void printCallCount() {
+    printf("%li\n", callcount);
 }
