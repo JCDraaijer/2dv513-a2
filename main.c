@@ -11,30 +11,17 @@
 #include <mysql/mysql.h>
 #include "timer.h"
 #include "jsmn.h"
-#include "redo.h"
+#include "sql.h"
 
 #define DEFAULT_BUFFER_SIZE 1024
 #define DEFAULT_THREAD_COUNT 4
 #define DEFAULT_QUERY_LINES 2000
 
-const char *queryStart = "INSERT INTO entries(id, parent_id, link_id, author, body, subreddit_id, subreddit, score, created_utc) VALUES ";
+const char *createSubredditsTable = "CREATE TABLE IF NOT EXISTS subreddits(subreddit_id BIGINT, subreddit_name VARCHAR(50))";
+const char *createCommentsTable = "CREATE TABLE IF NOT EXISTS comments(comment_id BIGINT,subreddit_id BIGINT,name VARCHAR(20),"
+                                  "link_id VARCHAR(20),author VARCHAR(25),body TEXT,time_created INTEGER,parent_id VARCHAR(20),score INTEGER);";
 
-struct job {
-    long start;
-    long end;
-    int jobId;
-    char *filename;
-    char *username;
-    char *password;
-    char *database;
-    int bufferSize;
-    parseresult_t result;
-    int queryLines;
-};
-
-int sqlInsert(char *buffer, const char *endP, long *totalTokens, long *totalLines, MYSQL *db, int queryLines);
-
-void parseTokensFromFile(char *, char *, char *, char *, int, int, long, struct job *, int queryLines);
+void parseTokensFromFile(char *, char *, char *, char *, int, int, long, job_t *, int queryLines);
 
 void *parseTokens(void *);
 
@@ -50,6 +37,7 @@ static struct option long_options[] =
          "query-lines", required_argument, NULL, 'q',
          "verbose", no_argument, NULL, 'v',
          "help", no_argument, NULL, 'h',
+         "create-tables", optional_argument, NULL, 'c',
          0, 0, 0, 0};
 
 int main(int argc, char **argv) {
@@ -64,7 +52,7 @@ int main(int argc, char **argv) {
     int c;
     int option_index;
     opterr = 0;
-    while ((c = getopt_long(argc, argv, "f:u:d:j:s:q:vhp:", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "p:f:u:d:j:s:q:vhc:", long_options, &option_index)) != -1) {
         switch (c) {
             case 'h': {
                 printf("Available options:\n");
@@ -109,9 +97,10 @@ int main(int argc, char **argv) {
                 }
                 break;
             }
-            case 'p':
+            case 'p': {
                 password = optarg;
                 break;
+            }
             case 'q': {
                 char *end;
                 queryLines = (int) strtol(optarg, &end, 10);
@@ -149,7 +138,8 @@ int main(int argc, char **argv) {
     }
 
     MYSQL *db = mysql_init(NULL);
-    MYSQL *connRes = mysql_real_connect(db, "localhost", username, password, database, 0, NULL, 0);
+    MYSQL *connRes = mysql_real_connect(db, "localhost", username, password, database, 0, NULL,
+                                        0);
     if (connRes == NULL) {
         printf("Couldn't open database %s (err=%s)\n", database, mysql_error(db));
         return EXIT_FAILURE;
@@ -178,7 +168,7 @@ int main(int argc, char **argv) {
     timekeeper_t totalTimer;
     starttimer(&totalTimer);
 
-    struct job jobs[threadCount];
+    job_t jobs[threadCount];
     parseTokensFromFile(filename, username, password, database, threadCount, bufferSize, size, jobs, queryLines);
     stoptimer(&totalTimer);
 
@@ -199,9 +189,22 @@ int main(int argc, char **argv) {
     return 0;
 }
 
+long findNextNewline(int fd, long min) {
+    long currentIndex = lseek(fd, 0, SEEK_CUR);
+    lseek(fd, min, SEEK_CUR);
+    long index = 0;
+    char character;
+    do {
+        read(fd, &character, 1);
+        index++;
+    } while (character != '\n');
+    lseek(fd, currentIndex, SEEK_SET);
+    return min + index;
+}
+
 void *parseTokens(void *collection) {
     int exit = 1;
-    struct job *job = collection;
+    job_t *job = collection;
     long totalTokenCount = 0;
 
     int fd = open(job->filename, O_RDONLY);
@@ -224,6 +227,9 @@ void *parseTokens(void *collection) {
         mysql_close(db);
         pthread_exit(&exit);
     }
+    string_t subreddits;
+    stringinit(&subreddits, 1024);
+    printf("Init subreddits\n");
     do {
         long toRead = bufferSize - 2048;
         long maxRead = job->end - lseek(fd, 0, SEEK_CUR);
@@ -241,10 +247,12 @@ void *parseTokens(void *collection) {
                 }
             }
         }
-        redo(buffer, buffer + bufferIndex + 1, &totalTokenCount, &totalLines, db, job->queryLines);
+        sqlinsert(MYSQL_MODE, db, buffer, job->queryLines, buffer + bufferIndex + 1, &subreddits, &totalTokenCount,
+                  &totalLines);
     } while (lseek(fd, 0, SEEK_CUR) < job->end);
     mysql_close(db);
     stoptimer(&timer);
+    stringfree(&subreddits);
 
     free(buffer);
     close(fd);
@@ -256,22 +264,9 @@ void *parseTokens(void *collection) {
     pthread_exit(&exit);
 }
 
-long findNextNewline(int fd, long min) {
-    long currentIndex = lseek(fd, 0, SEEK_CUR);
-    lseek(fd, min, SEEK_CUR);
-    long index = 0;
-    char character;
-    do {
-        read(fd, &character, 1);
-        index++;
-    } while (character != '\n');
-    lseek(fd, currentIndex, SEEK_SET);
-    return min + index;
-}
-
 void
 parseTokensFromFile(char *filename, char *username, char *password, char *database, int threadCount, int bufferSize,
-                    long maxSize, struct job *jobs,
+                    long maxSize, job_t *jobs,
                     int queryLines) {
     int fd = open(filename, O_RDONLY);
 
@@ -308,105 +303,4 @@ parseTokensFromFile(char *filename, char *username, char *password, char *databa
     for (int i = 0; i < threadCount; i++) {
         pthread_join(threads[i], NULL);
     }
-}
-
-int sqlInsert(char *buffer, const char *endP, long *totalTokens, long *totalLines, MYSQL *db, int queryLines) {
-    char *currentBuffer = buffer;
-
-    long querySize = 8192;
-    unsigned long queryLength = 0;
-    char *query = malloc(sizeof(char) * querySize);
-
-    int valuesStringSize = 1024;
-    char *valuesString = malloc(sizeof(char) * valuesStringSize);
-
-    int tokenCount = 0;
-    int linesTotal = 0;
-    jsmntok_t tokens[50];
-    jsmn_parser parser;
-
-    do {
-        int currentLines = 0;
-        sprintf(query, "%s", queryStart);
-        queryLength = strlen(query);
-        do {
-            int end = 0;
-
-            while (currentBuffer[end++] != '\n' && end != buffer - endP);
-            jsmn_init(&parser);
-            tokenCount = jsmn_parse(&parser, currentBuffer, end - 1, tokens, 50);
-            if (tokenCount < 0) {
-                printf("Error! Invalid entry at line %li. %d chars. Errorcode=%d.\n", *totalLines + 1, end, tokenCount);
-                continue;
-            }
-
-            for (int i = 2; i < tokenCount - 1; i += 2) {
-                jsmntok_t token = tokens[i];
-                for (int x = token.start; x < token.end - 1; x++) {
-                    if (currentBuffer[x] == '\\' && currentBuffer[x + 1] == '\"') {
-                        currentBuffer[x] = '\"';
-                    }
-                }
-            }
-
-            *totalTokens += tokenCount - 1;
-            while (end + 256 >= valuesStringSize) {
-                valuesStringSize += 1024;
-                valuesString = realloc(valuesString, sizeof(char) * valuesStringSize);
-            }
-
-            jsmntok_t *id = getbykey("id", currentBuffer, tokens, tokenCount);
-            jsmntok_t *parent_id = getbykey("parent_id", currentBuffer, tokens, tokenCount);
-            jsmntok_t *linkid = getbykey("link_id", currentBuffer, tokens, tokenCount);
-            jsmntok_t *author = getbykey("author", currentBuffer, tokens, tokenCount);
-            jsmntok_t *body = getbykey("body", currentBuffer, tokens, tokenCount);
-            jsmntok_t *subreddit_id = getbykey("subreddit_id", currentBuffer, tokens, tokenCount);
-            jsmntok_t *subreddit = getbykey("subreddit", currentBuffer, tokens, tokenCount);
-            jsmntok_t *score = getbykey("score", currentBuffer, tokens, tokenCount);
-            jsmntok_t *created_utc = getbykey("created_utc", currentBuffer, tokens, tokenCount);
-            unsigned long originalQueryLength = queryLength;
-            queryLength += sprintf(valuesString,
-                                   "(\"%.*s\", \"%.*s\", \"%.*s\", \"%.*s\", \"%.*s\", \"%.*s\", \"%.*s\", %.*s, %.*s),\n",
-                                   id->end - id->start,
-                                   currentBuffer + id->start,
-                                   parent_id->end - parent_id->start,
-                                   currentBuffer + parent_id->start,
-                                   linkid->end - linkid->start,
-                                   currentBuffer + linkid->start,
-                                   author->end - author->start,
-                                   currentBuffer + author->start,
-                                   body->end - body->start,
-                                   currentBuffer + body->start,
-                                   subreddit_id->end - subreddit_id->start,
-                                   currentBuffer + subreddit_id->start,
-                                   subreddit->end - subreddit->start,
-                                   currentBuffer + subreddit->start,
-                                   score->end - score->start,
-                                   currentBuffer + score->start,
-                                   created_utc->end - created_utc->start,
-                                   currentBuffer + created_utc->start);
-            while (querySize <= queryLength + 2) {
-                querySize += 1024;
-                query = realloc(query, sizeof(char) * querySize);
-            }
-            strncat(query + originalQueryLength, valuesString, queryLength - originalQueryLength);
-            query[queryLength] = 0;
-            *totalLines += 1;
-            linesTotal++;
-            currentLines++;
-            currentBuffer += end;
-        } while (currentLines < queryLines && currentBuffer < endP);
-        query[strlen(query) - 2] = ';';
-
-        int result = 0;
-
-        result = mysql_query(db, query);
-        if (result) {
-            printf("Error: %s\n", mysql_error(db));
-        }
-
-    } while (currentBuffer < endP);
-    free(valuesString);
-    free(query);
-    return 0;
 }
