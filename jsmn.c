@@ -363,7 +363,7 @@ JSMN_API void jsmn_init(jsmn_parser *parser) {
 }
 
 jsmntok_t *getbykey(const char *key, const char *jsonstring, jsmntok_t *tokens, int toklength) {
-    for (int i = 0; i < toklength; i++) {
+    for (int i = 1; i < toklength - 1; i += 2) {
         jsmntok_t token = tokens[i];
         if (tokenequals(jsonstring, &token, key)) {
             return &tokens[i + 1];
