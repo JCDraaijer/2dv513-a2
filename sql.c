@@ -58,7 +58,7 @@ int stringContainsWhole(const string_t *string, const char *buffer, jsmntok_t *t
     return 0;
 }
 
-int sqlinsert(sqlmode_e mode, void *db, char *buffer, int queryLines, const char *endP, string_t *subreddits,
+int sqlinsert(int mode, void *db, char *buffer, int queryLines, const char *endP, string_t *subreddits,
               long *totalTokens, long *totalLines) {
     char *currentBuffer = buffer;
 

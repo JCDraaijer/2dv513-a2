@@ -37,7 +37,9 @@ static struct option long_options[] =
          "query-lines", required_argument, NULL, 'q',
          "verbose", no_argument, NULL, 'v',
          "help", no_argument, NULL, 'h',
-         "create-tables", optional_argument, NULL, 'c',
+         "create-tables", no_argument, NULL, 'c',
+         "create-tables-const", no_argument, NULL, 128,
+         "mode", required_argument, NULL, 'm',
          0, 0, 0, 0};
 
 int main(int argc, char **argv) {
@@ -49,10 +51,11 @@ int main(int argc, char **argv) {
     char *database = NULL;
     char *username = NULL;
     char *password = NULL;
+    int mode = MYSQL_MODE;
+    opterr = 0;
     int c;
     int option_index;
-    opterr = 0;
-    while ((c = getopt_long(argc, argv, "p:f:u:d:j:s:q:vhc:", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "p:f:u:d:j:s:q:vhc", long_options, &option_index)) != -1) {
         switch (c) {
             case 'h': {
                 printf("Available options:\n");
@@ -60,6 +63,8 @@ int main(int argc, char **argv) {
                 printf("--username, -u [username]     The MySQL username to use. (REQUIRED)\n");
                 printf("--password, -p [password]     The MySQL password to use. (Alternatively, input it after executing the command)\n");
                 printf("--database, -d [filename]     The filename of the MySQL database to write the values to. (REQUIRED)\n");
+                printf("--create-tables, -c           Create the tables without constraints (if they do not exist)\n");
+                printf("--create-tables-const, -cc    Create the tables with constraints (if they do not exist)\n");
                 printf("--jobs, -j                    The amount of threads to be used for parsing. (Default: %d)\n",
                        DEFAULT_THREAD_COUNT);
                 printf("--buffer-size, -s             The initial size of the file buffer used by each thread in KB (may grow). (Default: %d)\n",
@@ -113,6 +118,9 @@ int main(int argc, char **argv) {
             case 'd':
                 database = optarg;
                 break;
+            case 'm':
+                mode = (int) strtol(optarg, NULL, 10);
+                break;
             case '?':
                 fprintf(stderr, "Invalid argument \"%s\". Use --help for help.\n", argv[optind - 1]);
                 return EXIT_FAILURE;
@@ -136,15 +144,18 @@ int main(int argc, char **argv) {
     if (password == NULL) {
         password = getpass("Password: ");
     }
+    void *db;
+    if (mode == MYSQL_MODE) {
+        db = mysql_init(NULL);
+        MYSQL *connRes = mysql_real_connect(db, "localhost", username, password, database, 0, NULL, 0);
+        if (connRes == NULL) {
+            printf("Couldn't open database %s (err=%s)\n", database, mysql_error(db));
+            return EXIT_FAILURE;
+        }
+        mysql_close(db);
+    } else if (mode == SQLITE_MODE) {
 
-    MYSQL *db = mysql_init(NULL);
-    MYSQL *connRes = mysql_real_connect(db, "localhost", username, password, database, 0, NULL,
-                                        0);
-    if (connRes == NULL) {
-        printf("Couldn't open database %s (err=%s)\n", database, mysql_error(db));
-        return EXIT_FAILURE;
     }
-    mysql_close(db);
 
     struct stat buffer;
 

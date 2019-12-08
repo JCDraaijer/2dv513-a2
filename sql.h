@@ -5,10 +5,8 @@
 #ifndef SQLTEST_SQL_H
 #define SQLTEST_SQL_H
 
-typedef enum {
-    SQLITE_MODE,
-    MYSQL_MODE
-} sqlmode_e;
+#define SQLITE_MODE 1
+#define MYSQL_MODE 2
 
 typedef struct {
     long lines;
@@ -37,7 +35,8 @@ typedef struct {
     unsigned int length;
 } string_t;
 
-int sqlinsert(sqlmode_e mode, void *db, char *buffer, int queryLines, const char *endP, string_t *subreddits, long *totalTokens,
+int sqlinsert(int mode, void *db, char *buffer, int queryLines, const char *endP, string_t *subreddits,
+              long *totalTokens,
               long *totalLines);
 
 void stringinit(string_t *string, unsigned int size);
