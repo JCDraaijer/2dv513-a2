@@ -186,7 +186,7 @@ int main(int argc, char **argv) {
         }
         mysql_close(db);
     } else if (mode == SQLITE_MODE) {
-        int connRes = sqlite3_open_v2(database, (sqlite3 **) &db, 0, NULL);
+        int connRes = sqlite3_open(database, (sqlite3 **) &db);
         if (connRes != SQLITE_OK) {
             printf("Couldn't open database (err=%d)\n", connRes);
             return EXIT_FAILURE;
