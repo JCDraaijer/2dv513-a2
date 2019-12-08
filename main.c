@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <pthread.h>
 #include <mysql/mysql.h>
+#include <sqlite3.h>
 #include "timer.h"
 #include "jsmn.h"
 #include "sql.h"
@@ -32,7 +33,7 @@ const char *createCommentsTableConst = "CREATE TABLE IF NOT EXISTS comments(comm
                                        "time_created INTEGER NOT NULL,parent_id VARCHAR(20) NOT NULL,score INTEGER NOT NULL, "
                                        "FOREIGN KEY (subreddit_id) REFERENCES subreddits(subreddit_id));";
 
-void parseTokensFromFile(char *, char *, char *, char *, int, int, long, job_t *, int queryLines);
+void parseTokensFromFile(char *, char *, char *, char *, int, int, long, job_t *, int queryLines, int mode);
 
 void *parseTokens(void *);
 
@@ -72,17 +73,18 @@ int main(int argc, char **argv) {
             case 'h': {
                 printf("Available options:\n");
                 printf("--filename, -f [filename]     Specify the filename to read the Reddit comments in JSON format from. (REQUIRED)\n");
-                printf("--username, -u [username]     The MySQL username to use. (REQUIRED)\n");
+                printf("--username, -u [username]     The MySQL username to use. (REQUIRED FOR MYSQL)\n");
                 printf("--password, -p [password]     The MySQL password to use. (Alternatively, input it after executing the command)\n");
-                printf("--database, -d [filename]     The filename of the MySQL database to write the values to. (REQUIRED)\n");
-                printf("--create-tables, -c           Create the tables without constraints (if they do not exist)\n");
-                printf("--create-tables-const, -cc    Create the tables with constraints (if they do not exist)\n");
+                printf("--database, -d [filename]     The filename of the database (or filename) to write the values to. (REQUIRED)\n");
+
                 printf("--jobs, -j                    The amount of threads to be used for parsing. (Default: %d)\n",
                        DEFAULT_THREAD_COUNT);
                 printf("--buffer-size, -s             The initial size of the file buffer used by each thread in KB (may grow). (Default: %d)\n",
                        DEFAULT_BUFFER_SIZE);
                 printf("--query-lines, -q             The maximum amount of tuples that should be inserted per query. (Default: %d)\n",
                        DEFAULT_QUERY_LINES);
+                printf("--create-tables, -c           Create the tables without constraints (if they do not exist)\n");
+                printf("--create-tables-const, -cc    Create the tables with constraints (if they do not exist)\n");
                 printf("--verbose, -v                 Specify the verbosity of the program. Use multiple times for more verbosity\n");
                 printf("--help, -h                    Print this menu.\n");
                 return EXIT_SUCCESS;
@@ -184,7 +186,24 @@ int main(int argc, char **argv) {
         }
         mysql_close(db);
     } else if (mode == SQLITE_MODE) {
-
+        int connRes = sqlite3_open_v2(database, (sqlite3 **) &db, 0, NULL);
+        if (connRes != SQLITE_OK) {
+            printf("Couldn't open database (err=%d)\n", connRes);
+            return EXIT_FAILURE;
+        }
+        if (createTables == CREATE_TABLES_DROP || createTables == CREATE_TABLES_CONST_DROP) {
+            sqlite3_exec(db, "DROP TABLE subreddits;", NULL, 0, NULL);
+            sqlite3_exec(db, "DROP TABLE comments;", NULL, 0, NULL);
+            createTables -= 2;
+        }
+        if (createTables == CREATE_TABLES) {
+            sqlite3_exec(db, createSubredditsTable, NULL, 0, NULL);
+            sqlite3_exec(db, createCommentsTable, NULL, 0, NULL);
+        } else if (createTables == CREATE_TABLES_CONST) {
+            sqlite3_exec(db, createSubredditsTableConst, NULL, 0, NULL);
+            sqlite3_exec(db, createCommentsTableConst, NULL, 0, NULL);
+        }
+        sqlite3_close_v2(db);
     }
 
     struct stat buffer;
@@ -210,7 +229,7 @@ int main(int argc, char **argv) {
     starttimer(&totalTimer);
 
     job_t jobs[threadCount];
-    parseTokensFromFile(filename, username, password, database, threadCount, bufferSize, size, jobs, queryLines);
+    parseTokensFromFile(filename, username, password, database, threadCount, bufferSize, size, jobs, queryLines, mode);
     stoptimer(&totalTimer);
 
     long totalLines = 0;
@@ -288,7 +307,7 @@ void *parseTokens(void *collection) {
                 }
             }
         }
-        sqlinsert(MYSQL_MODE, db, buffer, job->queryLines, buffer + bufferIndex + 1, &subreddits, &totalTokenCount,
+        sqlinsert(job->mode, db, buffer, job->queryLines, buffer + bufferIndex + 1, &subreddits, &totalTokenCount,
                   &totalLines);
     } while (lseek(fd, 0, SEEK_CUR) < job->end);
     mysql_close(db);
@@ -308,7 +327,7 @@ void *parseTokens(void *collection) {
 void
 parseTokensFromFile(char *filename, char *username, char *password, char *database, int threadCount, int bufferSize,
                     long maxSize, job_t *jobs,
-                    int queryLines) {
+                    int queryLines, int mode) {
     int fd = open(filename, O_RDONLY);
 
     long proxSize = maxSize / threadCount;
@@ -325,6 +344,7 @@ parseTokensFromFile(char *filename, char *username, char *password, char *databa
         jobs[i].jobId = i;
         jobs[i].result.invalid = 0;
         jobs[i].queryLines = queryLines;
+        jobs[i].mode = mode;
         if (i == threadCount - 1) {
             jobs[i].start = start;
             jobs[i].end = maxSize;

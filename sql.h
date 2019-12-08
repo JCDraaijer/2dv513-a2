@@ -27,6 +27,7 @@ typedef struct {
     int bufferSize;
     parseresult_t result;
     int queryLines;
+    int mode;
 } job_t;
 
 typedef struct {

@@ -80,38 +80,32 @@ int sqlinsert(int mode, void *db, char *buffer, int queryLines, const char *endP
         result = constructQueries(queryLines, &commentsQuery, &singleValue, subreddits, &subredditQuery, currentBuffer,
                                   endP);
         int success = 0;
-        switch (mode) {
-            case MYSQL_MODE: {
-                int mysqlResult = 0;
+        int mysqlResult = 0;
 
-                if (subredditQuery.length != 0) {
-                    int index = 0;
-                    int end = 0;
-                    while (index < subredditQuery.length) {
-                        while (subredditQuery.buffer[end++] != ';');
-                        mysqlResult = mysql_real_query(db, subredditQuery.buffer + index, end - index);
-                        if (mysqlResult) {
-                            printf("Error %d when inserting subreddits: %s\n", mysqlResult, mysql_error(db));
-                            printf("%.*s\n", end - index, subredditQuery.buffer + index);
-                        }
-                        index = end + 1;
+        if (subredditQuery.length != 0) {
+            int index = 0;
+            int end = 0;
+            while (index < subredditQuery.length) {
+                while (subredditQuery.buffer[end++] != ';');
+                if (mode == MYSQL_MODE) {
+                    mysqlResult = mysql_real_query(db, subredditQuery.buffer + index, end - index);
+                    if (mysqlResult) {
+                        printf("Error %d when inserting subreddits: %s\n", mysqlResult, mysql_error(db));
+                        printf("%.*s\n", end - index, subredditQuery.buffer + index);
                     }
-                }
+                } else if (mode == SQLITE_MODE) {
 
-                mysqlResult = mysql_query(db, commentsQuery.buffer);
-                if (mysqlResult) {
-                    printf("Error %d when inserting lines: %s\n", mysqlResult, mysql_error(db));
-                    success = 0;
-                } else {
-                    success = 1;
                 }
-                break;
+                index = end + 1;
             }
-            case SQLITE_MODE: {
-                break;
-            }
-            default:
-                break;
+        }
+
+        mysqlResult = mysql_query(db, commentsQuery.buffer);
+        if (mysqlResult) {
+            printf("Error %d when inserting lines: %s\n", mysqlResult, mysql_error(db));
+            success = 0;
+        } else {
+            success = 1;
         }
         if (success) {
             *totalLines += result.lines;
