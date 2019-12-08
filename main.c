@@ -17,9 +17,20 @@
 #define DEFAULT_THREAD_COUNT 4
 #define DEFAULT_QUERY_LINES 2000
 
+#define CREATE_NO_TABLES 0
+#define CREATE_TABLES 1
+#define CREATE_TABLES_CONST 2
+#define CREATE_TABLES_DROP 3
+#define CREATE_TABLES_CONST_DROP 4
+
 const char *createSubredditsTable = "CREATE TABLE IF NOT EXISTS subreddits(subreddit_id BIGINT, subreddit_name VARCHAR(50))";
 const char *createCommentsTable = "CREATE TABLE IF NOT EXISTS comments(comment_id BIGINT,subreddit_id BIGINT,name VARCHAR(20),"
                                   "link_id VARCHAR(20),author VARCHAR(25),body TEXT,time_created INTEGER,parent_id VARCHAR(20),score INTEGER);";
+const char *createSubredditsTableConst = "CREATE TABLE IF NOT EXISTS subreddits(subreddit_id BIGINT PRIMARY KEY UNIQUE NOT NULL,subreddit_name VARCHAR(50) UNIQUE NOT NULL);";
+const char *createCommentsTableConst = "CREATE TABLE IF NOT EXISTS comments(comment_id BIGINT PRIMARY KEY UNIQUE NOT NULL,subreddit_id BIGINT NOT NULL,name VARCHAR(20) NOT NULL,"
+                                       "link_id VARCHAR(20) NOT NULL, author VARCHAR(25) NOT NULL, body TEXT NOT NULL, "
+                                       "time_created INTEGER NOT NULL,parent_id VARCHAR(20) NOT NULL,score INTEGER NOT NULL, "
+                                       "FOREIGN KEY (subreddit_id) REFERENCES subreddits(subreddit_id));";
 
 void parseTokensFromFile(char *, char *, char *, char *, int, int, long, job_t *, int queryLines);
 
@@ -52,10 +63,11 @@ int main(int argc, char **argv) {
     char *username = NULL;
     char *password = NULL;
     int mode = MYSQL_MODE;
+    int createTables = CREATE_NO_TABLES;
     opterr = 0;
     int c;
     int option_index;
-    while ((c = getopt_long(argc, argv, "p:f:u:d:j:s:q:vhc", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "p:f:u:d:j:s:q:vhcm:", long_options, &option_index)) != -1) {
         switch (c) {
             case 'h': {
                 printf("Available options:\n");
@@ -121,6 +133,12 @@ int main(int argc, char **argv) {
             case 'm':
                 mode = (int) strtol(optarg, NULL, 10);
                 break;
+            case 'c':
+                createTables++;
+                break;
+            case 128:
+                createTables = CREATE_TABLES_CONST;
+                break;
             case '?':
                 fprintf(stderr, "Invalid argument \"%s\". Use --help for help.\n", argv[optind - 1]);
                 return EXIT_FAILURE;
@@ -151,6 +169,18 @@ int main(int argc, char **argv) {
         if (connRes == NULL) {
             printf("Couldn't open database %s (err=%s)\n", database, mysql_error(db));
             return EXIT_FAILURE;
+        }
+        if (createTables == CREATE_TABLES_DROP || createTables == CREATE_TABLES_CONST_DROP) {
+            mysql_query(db, "DROP TABLE subreddits;");
+            mysql_query(db, "DROP TABLE comments;");
+            createTables -= 2;
+        }
+        if (createTables == CREATE_TABLES) {
+            mysql_query(db, createSubredditsTable);
+            mysql_query(db, createCommentsTable);
+        } else if (createTables == CREATE_TABLES_CONST) {
+            mysql_query(db, createSubredditsTableConst);
+            mysql_query(db, createCommentsTableConst);
         }
         mysql_close(db);
     } else if (mode == SQLITE_MODE) {
