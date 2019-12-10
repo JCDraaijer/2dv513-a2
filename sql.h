@@ -5,9 +5,6 @@
 #ifndef SQLTEST_SQL_H
 #define SQLTEST_SQL_H
 
-#define SQLITE_MODE 1
-#define MYSQL_MODE 2
-
 typedef struct {
     long lines;
     long tokens;
@@ -27,7 +24,6 @@ typedef struct {
     int bufferSize;
     parseresult_t result;
     int queryLines;
-    int mode;
 } job_t;
 
 typedef struct {
@@ -36,7 +32,7 @@ typedef struct {
     unsigned int length;
 } string_t;
 
-int sqlinsert(int mode, void *db, char *buffer, int queryLines, const char *endP, string_t *subreddits,
+int sqlinsert(MYSQL *db, char *buffer, int queryLines, const char *endP, string_t *subreddits,
               long *totalTokens,
               long *totalLines);
 

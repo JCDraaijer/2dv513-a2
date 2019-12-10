@@ -9,7 +9,6 @@
 #include <sys/stat.h>
 #include <pthread.h>
 #include <mysql/mysql.h>
-#include <sqlite3.h>
 #include "timer.h"
 #include "jsmn.h"
 #include "sql.h"
@@ -33,7 +32,7 @@ const char *createCommentsTableConst = "CREATE TABLE IF NOT EXISTS comments(comm
                                        "time_created INTEGER NOT NULL,parent_id VARCHAR(20) NOT NULL,score INTEGER NOT NULL, "
                                        "FOREIGN KEY (subreddit_id) REFERENCES subreddits(subreddit_id));";
 
-void parseTokensFromFile(char *, char *, char *, char *, int, int, long, job_t *, int queryLines, int mode);
+void parseTokensFromFile(char *, char *, char *, char *, int, int, long, job_t *, int queryLines);
 
 void *parseTokens(void *);
 
@@ -51,7 +50,6 @@ static struct option long_options[] =
          "help", no_argument, NULL, 'h',
          "create-tables", no_argument, NULL, 'c',
          "create-tables-const", no_argument, NULL, 128,
-         "mode", required_argument, NULL, 'm',
          0, 0, 0, 0};
 
 int main(int argc, char **argv) {
@@ -63,12 +61,11 @@ int main(int argc, char **argv) {
     char *database = NULL;
     char *username = NULL;
     char *password = NULL;
-    int mode = MYSQL_MODE;
     int createTables = CREATE_NO_TABLES;
     opterr = 0;
     int c;
     int option_index;
-    while ((c = getopt_long(argc, argv, "p:f:u:d:j:s:q:vhcm:", long_options, &option_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "p:f:u:d:j:s:q:vhc", long_options, &option_index)) != -1) {
         switch (c) {
             case 'h': {
                 printf("Available options:\n");
@@ -132,9 +129,6 @@ int main(int argc, char **argv) {
             case 'd':
                 database = optarg;
                 break;
-            case 'm':
-                mode = (int) strtol(optarg, NULL, 10);
-                break;
             case 'c':
                 createTables++;
                 break;
@@ -164,47 +158,26 @@ int main(int argc, char **argv) {
     if (password == NULL) {
         password = getpass("Password: ");
     }
-    void *db;
-    if (mode == MYSQL_MODE) {
-        db = mysql_init(NULL);
-        MYSQL *connRes = mysql_real_connect(db, "localhost", username, password, database, 0, NULL, 0);
-        if (connRes == NULL) {
-            printf("Couldn't open database %s (err=%s)\n", database, mysql_error(db));
-            return EXIT_FAILURE;
-        }
-        if (createTables == CREATE_TABLES_DROP || createTables == CREATE_TABLES_CONST_DROP) {
-            mysql_query(db, "DROP TABLE subreddits;");
-            mysql_query(db, "DROP TABLE comments;");
-            createTables -= 2;
-        }
-        if (createTables == CREATE_TABLES) {
-            mysql_query(db, createSubredditsTable);
-            mysql_query(db, createCommentsTable);
-        } else if (createTables == CREATE_TABLES_CONST) {
-            mysql_query(db, createSubredditsTableConst);
-            mysql_query(db, createCommentsTableConst);
-        }
-        mysql_close(db);
-    } else if (mode == SQLITE_MODE) {
-        int connRes = sqlite3_open(database, (sqlite3 **) &db);
-        if (connRes != SQLITE_OK) {
-            printf("Couldn't open database (err=%d)\n", connRes);
-            return EXIT_FAILURE;
-        }
-        if (createTables == CREATE_TABLES_DROP || createTables == CREATE_TABLES_CONST_DROP) {
-            sqlite3_exec(db, "DROP TABLE subreddits;", NULL, 0, NULL);
-            sqlite3_exec(db, "DROP TABLE comments;", NULL, 0, NULL);
-            createTables -= 2;
-        }
-        if (createTables == CREATE_TABLES) {
-            sqlite3_exec(db, createSubredditsTable, NULL, 0, NULL);
-            sqlite3_exec(db, createCommentsTable, NULL, 0, NULL);
-        } else if (createTables == CREATE_TABLES_CONST) {
-            sqlite3_exec(db, createSubredditsTableConst, NULL, 0, NULL);
-            sqlite3_exec(db, createCommentsTableConst, NULL, 0, NULL);
-        }
-        sqlite3_close_v2(db);
+    MYSQL *db = mysql_init(NULL);
+    MYSQL *connRes = mysql_real_connect(db, "localhost", username, password, database, 0, NULL, 0);
+    if (connRes == NULL) {
+        printf("Couldn't open database %s (err=%s)\n", database, mysql_error(db));
+        return EXIT_FAILURE;
     }
+    if (createTables == CREATE_TABLES_DROP || createTables == CREATE_TABLES_CONST_DROP) {
+        printf("Dropped tables\n");
+        mysql_query(db, "DROP TABLE subreddits;");
+        mysql_query(db, "DROP TABLE comments;");
+        createTables -= 2;
+    }
+    if (createTables == CREATE_TABLES) {
+        mysql_query(db, createSubredditsTable);
+        mysql_query(db, createCommentsTable);
+    } else if (createTables == CREATE_TABLES_CONST) {
+        mysql_query(db, createSubredditsTableConst);
+        mysql_query(db, createCommentsTableConst);
+    }
+    mysql_close(db);
 
     struct stat buffer;
 
@@ -229,7 +202,7 @@ int main(int argc, char **argv) {
     starttimer(&totalTimer);
 
     job_t jobs[threadCount];
-    parseTokensFromFile(filename, username, password, database, threadCount, bufferSize, size, jobs, queryLines, mode);
+    parseTokensFromFile(filename, username, password, database, threadCount, bufferSize, size, jobs, queryLines);
     stoptimer(&totalTimer);
 
     long totalLines = 0;
@@ -307,7 +280,7 @@ void *parseTokens(void *collection) {
                 }
             }
         }
-        sqlinsert(job->mode, db, buffer, job->queryLines, buffer + bufferIndex + 1, &subreddits, &totalTokenCount,
+        sqlinsert(db, buffer, job->queryLines, buffer + bufferIndex + 1, &subreddits, &totalTokenCount,
                   &totalLines);
     } while (lseek(fd, 0, SEEK_CUR) < job->end);
     mysql_close(db);
@@ -327,7 +300,7 @@ void *parseTokens(void *collection) {
 void
 parseTokensFromFile(char *filename, char *username, char *password, char *database, int threadCount, int bufferSize,
                     long maxSize, job_t *jobs,
-                    int queryLines, int mode) {
+                    int queryLines) {
     int fd = open(filename, O_RDONLY);
 
     long proxSize = maxSize / threadCount;
@@ -344,7 +317,6 @@ parseTokensFromFile(char *filename, char *username, char *password, char *databa
         jobs[i].jobId = i;
         jobs[i].result.invalid = 0;
         jobs[i].queryLines = queryLines;
-        jobs[i].mode = mode;
         if (i == threadCount - 1) {
             jobs[i].start = start;
             jobs[i].end = maxSize;

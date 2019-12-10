@@ -58,7 +58,7 @@ int stringContainsWhole(const string_t *string, const char *buffer, jsmntok_t *t
     return 0;
 }
 
-int sqlinsert(int mode, void *db, char *buffer, int queryLines, const char *endP, string_t *subreddits,
+int sqlinsert(MYSQL *db, char *buffer, int queryLines, const char *endP, string_t *subreddits,
               long *totalTokens, long *totalLines) {
     char *currentBuffer = buffer;
 
@@ -87,14 +87,10 @@ int sqlinsert(int mode, void *db, char *buffer, int queryLines, const char *endP
             int end = 0;
             while (index < subredditQuery.length) {
                 while (subredditQuery.buffer[end++] != ';');
-                if (mode == MYSQL_MODE) {
-                    mysqlResult = mysql_real_query(db, subredditQuery.buffer + index, end - index);
-                    if (mysqlResult) {
-                        printf("Error %d when inserting subreddits: %s\n", mysqlResult, mysql_error(db));
-                        printf("%.*s\n", end - index, subredditQuery.buffer + index);
-                    }
-                } else if (mode == SQLITE_MODE) {
-
+                mysqlResult = mysql_real_query(db, subredditQuery.buffer + index, end - index);
+                if (mysqlResult) {
+                    printf("Error %d when inserting subreddits: %s\n", mysqlResult, mysql_error(db));
+                    printf("%.*s\n", end - index, subredditQuery.buffer + index);
                 }
                 index = end + 1;
             }
